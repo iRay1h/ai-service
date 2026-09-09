@@ -19,8 +19,13 @@ class ProjectContext(BaseModel):
     project_name: str
     active_sprint_name: Optional[str] = None
     pending_tasks_summary: Optional[str] = None
-    # Se puede ir ampliando con mas datos segun lo necesiten
-    # (columnas del tablero, miembros del equipo, etc.)
+    members: list[dict] = Field(default_factory=list)
+    columns: list[dict] = Field(default_factory=list)
+    tasks: list[dict] = Field(default_factory=list)
+    sprints: list[dict] = Field(default_factory=list)
+    documents: list[dict] = Field(default_factory=list)
+    current_user_id: Optional[int] = None
+    current_user_name: Optional[str] = None
 
 
 class ChatHistoryItem(BaseModel):
@@ -43,8 +48,32 @@ class SuggestedCard(BaseModel):
     title: str
     description: Optional[str] = None
     suggested_priority: Optional[str] = None  # ej: "ALTA", "MEDIA", "BAJA"
+    column_id: Optional[int] = None
+    assigned_to: Optional[int] = None
+    due_date: Optional[str] = None
+
+
+class AiAction(BaseModel):
+    type: str = Field(alias="action")
+    task_id: Optional[int] = None
+    document_id: Optional[int] = None
+    project_id: Optional[int] = None
+    column_id: Optional[int] = None
+    assigned_to: Optional[int] = None
+    sprint_id: Optional[int] = None
+    position: Optional[int] = None
+    title: Optional[str] = None
+    description: Optional[str] = None
+    content: Optional[str] = None
+    document_type: Optional[str] = None
+    color: Optional[str] = None
+    due_date: Optional[str] = None
+    priority: Optional[str] = None
+
+    model_config = {"populate_by_name": True}
 
 
 class ChatResponse(BaseModel):
     reply: str
     suggested_card: Optional[SuggestedCard] = None
+    actions: list[AiAction] = Field(default_factory=list)
