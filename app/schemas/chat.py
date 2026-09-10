@@ -33,10 +33,23 @@ class ChatHistoryItem(BaseModel):
     content: str
 
 
+class ToolCallFunction(BaseModel):
+    name: str
+    arguments: dict = Field(default_factory=dict)
+
+
+class ToolCall(BaseModel):
+    id: Optional[str] = None
+    type: str = "function"
+    function: ToolCallFunction
+
+
 class ChatRequest(BaseModel):
     message: str = Field(..., min_length=1, max_length=4000)
     context: Optional[ProjectContext] = None
     history: list[ChatHistoryItem] = Field(default_factory=list)
+    model: Optional[str] = None
+    tools: list[dict] = Field(default_factory=list)
 
 
 class SuggestedCard(BaseModel):
@@ -74,6 +87,19 @@ class AiAction(BaseModel):
 
 
 class ChatResponse(BaseModel):
-    reply: str
+    success: bool = True
+    reply: str = ""
     suggested_card: Optional[SuggestedCard] = None
     actions: list[AiAction] = Field(default_factory=list)
+    tool_calls: list[ToolCall] = Field(default_factory=list)
+    usage: Optional[dict] = None
+    model: Optional[str] = None
+    fallback: bool = False
+    level: Optional[str] = None
+    quota: Optional[dict] = None
+    status_message: Optional[str] = None
+    error_code: Optional[str] = None
+    http_status: Optional[int] = None
+    provider: Optional[str] = None
+    reason: Optional[str] = None
+    retryable: bool = False

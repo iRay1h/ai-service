@@ -90,7 +90,7 @@ Esto instala:
 - **Uvicorn**: el servidor que corre la aplicación.
 - **Pydantic**: valida automáticamente los datos que entran y salen.
 - **python-dotenv**: lee el archivo `.env`.
-- **google-genai**: el SDK oficial para hablar con Gemini.
+- **httpx**: realiza las llamadas HTTP a OpenRouter.
 
 ---
 
@@ -108,10 +108,14 @@ copy .env.example .env
 
 Abre el nuevo archivo `.env` y completa:
 
-1. **GEMINI_API_KEY**: entra a https://aistudio.google.com/apikey, inicia
-   sesión con una cuenta de Google, y genera una API key gratis (no pide
-   tarjeta de crédito).
-2. **INTERNAL_API_KEY**: invéntate un texto largo y aleatorio. Puedes
+1. **OPENROUTER_API_KEY**: usa la misma clave para todos los modelos de OpenRouter.
+   No se usan varias API keys; el fallback se hace entre modelos, no entre proveedores.
+2. **OPENROUTER_MODEL_PRIMARY**, **OPENROUTER_MODEL_SECONDARY**, **OPENROUTER_MODEL_FALLBACK**:
+   por defecto se usan los modelos gratuitos activos que responden correctamente en OpenRouter:
+   - `openai/gpt-oss-20b`
+   - `meta-llama/llama-3.2-3b-instruct`
+   - `google/gemma-3-4b-it`
+3. **INTERNAL_API_KEY**: invéntate un texto largo y aleatorio. Puedes
    generarlo con:
    ```bash
    python -c "import secrets; print(secrets.token_hex(32))"
