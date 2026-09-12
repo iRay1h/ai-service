@@ -45,11 +45,11 @@ class ToolCall(BaseModel):
 
 
 class ChatRequest(BaseModel):
-    message: str = Field(..., min_length=1, max_length=4000)
+    message: str = Field(..., min_length=1, max_length=32000)
     context: Optional[ProjectContext] = None
     history: list[ChatHistoryItem] = Field(default_factory=list)
     model: Optional[str] = None
-    tools: list[dict] = Field(default_factory=list)
+    tools: Optional[list[dict]] = None
 
 
 class SuggestedCard(BaseModel):

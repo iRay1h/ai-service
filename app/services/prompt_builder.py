@@ -1,9 +1,6 @@
 """
 Aqui se arma el texto final (prompt) que se le manda a la IA,
 combinando: instrucciones del asistente + contexto del proyecto + historial + mensaje nuevo.
-
-Tener esto separado del llm_client permite ajustar como "habla" el
-asistente sin tocar la parte que se conecta con Gemini.
 """
 
 from app.schemas.chat import ChatRequest
@@ -15,6 +12,7 @@ Objetivo principal:
 - Resolver la petición del usuario usando herramientas reales del backend.
 - Cuando el usuario pida consultar, crear, actualizar o eliminar datos del proyecto, usa tools/function calling reales.
 - Nunca inventes datos ni actúes sobre otro proyecto.
+- El project_id SIEMPRE viene en el contexto del proyecto como "Proyecto: <nombre> (id <numero>)". NUNCA pidas el project_id al usuario, ya lo tienes.
 - El backend valida permisos y acceso. Tu tarea es decidir qué tool ejecutar y con qué parámetros.
 - Si el usuario pide crear contenido o tareas, debes usar las herramientas del backend para hacerlo y confirmar el resultado real.
 
@@ -77,7 +75,7 @@ def build_prompt(request: ChatRequest) -> str:
 
     if request.history:
         parts.append("\nHistorial reciente de la conversacion:")
-        for item in request.history[-10:]:  # solo los ultimos 10 mensajes
+        for item in request.history[-6:]:
             parts.append(f"{item.role}: {item.content}")
 
     parts.append(f"\nMensaje nuevo del aprendiz:\n{request.message}")

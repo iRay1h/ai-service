@@ -19,21 +19,22 @@ class Settings:
     OPENROUTER_API_KEY: str = os.getenv("OPENROUTER_API_KEY", "")
     OPENROUTER_BASE_URL: str = os.getenv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1")
     OPENROUTER_TIMEOUT_SECONDS: float = float(os.getenv("OPENROUTER_TIMEOUT_SECONDS", "90"))
-    OPENROUTER_MAX_OUTPUT_TOKENS: int = int(os.getenv("OPENROUTER_MAX_OUTPUT_TOKENS", "1024"))
+    OPENROUTER_MAX_OUTPUT_TOKENS: int = int(os.getenv("OPENROUTER_MAX_OUTPUT_TOKENS", "0"))
+    OPENROUTER_REASONING_EFFORT: str = os.getenv("OPENROUTER_REASONING_EFFORT", "low")
     OPENROUTER_HTTP_REFERER: str = os.getenv("OPENROUTER_HTTP_REFERER", "http://localhost:8000")
     OPENROUTER_APP_TITLE: str = os.getenv("OPENROUTER_APP_TITLE", "Syncra AI")
 
     MODELS: Dict[str, Dict[str, str]] = {
         "primary": {
-            "name": os.getenv("OPENROUTER_MODEL_PRIMARY", "openai/gpt-oss-20b"),
+            "name": os.getenv("OPENROUTER_MODEL_PRIMARY", "nvidia/nemotron-3-ultra-550b-a55b:free"),
             "label": "advanced",
         },
         "secondary": {
-            "name": os.getenv("OPENROUTER_MODEL_SECONDARY", "meta-llama/llama-3.2-3b-instruct"),
+            "name": os.getenv("OPENROUTER_MODEL_SECONDARY", "nvidia/nemotron-3-super-120b-a12b:free"),
             "label": "standard",
         },
         "fallback": {
-            "name": os.getenv("OPENROUTER_MODEL_FALLBACK", "google/gemma-3-4b-it"),
+            "name": os.getenv("OPENROUTER_MODEL_FALLBACK", "nvidia/nemotron-nano-9b-v2:free"),
             "label": "basic",
         },
     }

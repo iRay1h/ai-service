@@ -13,12 +13,19 @@ router = APIRouter(prefix="/ai", tags=["chat"])
 logger = logging.getLogger(__name__)
 
 
+def _strip_code_fence(text: str) -> str:
+    if not text.startswith("```"):
+        return text
+    stripped = text.split("\n", 1)[1] if "\n" in text else ""
+    return stripped.rsplit("```", 1)[0].strip()
+
+
 @router.post("/chat", response_model=ChatResponse, dependencies=[Depends(verify_internal_key)])
 def chat(request: ChatRequest) -> ChatResponse | JSONResponse:
     """Recibe el mensaje con contexto del proyecto y devuelve la respuesta del modelo."""
     prompt = build_prompt(request)
     target_model = (request.model or "primary").lower() if hasattr(request, "model") else "primary"
-    tools = request.tools or DEFAULT_TOOLS
+    tools = request.tools if request.tools is not None else DEFAULT_TOOLS
     try:
         raw_response = ask_openrouter(prompt, target_model, tools)
     except OpenRouterClientError as exc:
@@ -63,51 +70,54 @@ def chat(request: ChatRequest) -> ChatResponse | JSONResponse:
     text = (raw_response.get("text") or "").strip()
     actual_model = raw_response.get("model") or settings.get_model_name_for_key(target_model)
     fallback_used = bool(raw_response.get("fallback"))
-    status_message = "Se está usando el modelo principal de Syncra AI." if not fallback_used else f"Se activó fallback a {actual_model} porque el modelo principal no estaba disponible."
+    status_message = (
+        "Se está usando el modelo principal de Syncra AI."
+        if not fallback_used
+        else f"Se activó fallback a {actual_model} porque el modelo principal no estaba disponible."
+    )
     tool_calls = raw_response.get("tool_calls") or []
-    try:
-        if text.startswith("```"):
-            text = text.split("\n", 1)[1].rsplit("```", 1)[0].strip()
-        if tool_calls:
+    usage = raw_response.get("usage")
+
+    text = _strip_code_fence(text)
+
+    if tool_calls:
+        return ChatResponse(
+            success=True,
+            reply=text or "He recibido la necesidad de ejecutar una herramienta del backend.",
+            tool_calls=tool_calls,
+            model=actual_model,
+            fallback=fallback_used,
+            level=settings.get_level_for_model(target_model),
+            usage=usage,
+            status_message=status_message,
+            provider="openrouter",
+            http_status=200,
+        )
+
+    if text.strip().startswith("{"):
+        try:
+            parsed = json.loads(text)
+        except json.JSONDecodeError:
+            parsed = None
+        if isinstance(parsed, dict) and (
+            "reply" in parsed or "actions" in parsed or "suggested_card" in parsed
+        ):
+            reply_value = parsed.get("reply") or parsed.get("message") or "He completado la operación solicitada."
             return ChatResponse(
                 success=True,
-                reply=text or "He recibido la necesidad de ejecutar una herramienta del backend.",
-                tool_calls=tool_calls,
+                reply=str(reply_value),
+                suggested_card=parsed.get("suggested_card"),
+                tool_calls=[],
                 model=actual_model,
                 fallback=fallback_used,
                 level=settings.get_level_for_model(target_model),
-                quota={
-                    "input_tokens": raw_response.get("usage", {}).get("prompt_tokens"),
-                    "output_tokens": raw_response.get("usage", {}).get("completion_tokens"),
-                    "total_tokens": raw_response.get("usage", {}).get("total_tokens"),
-                } if raw_response.get("usage") else None,
+                usage=usage,
                 status_message=status_message,
                 provider="openrouter",
                 http_status=200,
             )
-        if text.strip().startswith("{"):
-            parsed = json.loads(text)
-            if isinstance(parsed, dict) and ("reply" in parsed or "actions" in parsed or "suggested_card" in parsed):
-                reply_value = parsed.get("reply") or parsed.get("message") or "He completado la operación solicitada."
-                response = ChatResponse(
-                    success=True,
-                    reply=str(reply_value),
-                    suggested_card=parsed.get("suggested_card"),
-                    tool_calls=[],
-                    model=actual_model,
-                    fallback=fallback_used,
-                    level=settings.get_level_for_model(target_model),
-                    status_message=status_message,
-                    provider="openrouter",
-                    http_status=200,
-                )
-                if raw_response.get("usage"):
-                    response.quota = {
-                        "input_tokens": raw_response["usage"].get("prompt_tokens"),
-                        "output_tokens": raw_response["usage"].get("completion_tokens"),
-                        "total_tokens": raw_response["usage"].get("total_tokens"),
-                    }
-                return response
+
+    try:
         parsed = json.loads(text)
         response = ChatResponse.model_validate(parsed)
         response.model = actual_model
@@ -117,15 +127,10 @@ def chat(request: ChatRequest) -> ChatResponse | JSONResponse:
         response.success = True
         response.provider = "openrouter"
         response.http_status = 200
-        if raw_response.get("usage"):
-            response.quota = {
-                "input_tokens": raw_response["usage"].get("prompt_tokens"),
-                "output_tokens": raw_response["usage"].get("completion_tokens"),
-                "total_tokens": raw_response["usage"].get("total_tokens"),
-            }
+        response.usage = usage
         return response
     except (json.JSONDecodeError, ValueError, TypeError):
-        logger.warning("OpenRouter devolvio un formato no estructurado; se usa como respuesta textual")
+        logger.debug("OpenRouter devolvió un formato no estructurado; se usa como respuesta textual")
         return ChatResponse(
             success=True,
             reply=text or "No pude generar una respuesta válida.",
@@ -134,11 +139,7 @@ def chat(request: ChatRequest) -> ChatResponse | JSONResponse:
             model=actual_model,
             fallback=fallback_used,
             level=settings.get_level_for_model(target_model),
-            quota={
-                "input_tokens": raw_response.get("usage", {}).get("prompt_tokens"),
-                "output_tokens": raw_response.get("usage", {}).get("completion_tokens"),
-                "total_tokens": raw_response.get("usage", {}).get("total_tokens"),
-            } if raw_response.get("usage") else None,
+            usage=usage,
             status_message=status_message,
             provider="openrouter",
             http_status=200,

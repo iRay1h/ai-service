@@ -196,7 +196,7 @@ def _build_headers(api_key: str) -> dict[str, str]:
 
 def _ordered_model_candidates(preferred_model: str | None) -> list[str]:
     requested = (preferred_model or "primary").lower()
-    ordered = []
+    ordered: list[str] = []
     if requested in settings.MODELS:
         ordered.append(requested)
     for model_key in MODEL_PRIORITY:
@@ -271,6 +271,19 @@ def _classify_http_error(exc: httpx.HTTPError, model_name: str) -> OpenRouterCli
                 model=model_name,
                 status_message="El proveedor de IA rechazó la solicitud por permisos.",
             )
+
+        if status_code == 404:
+            return OpenRouterClientError(
+                message or f"El modelo {model_name} no existe en OpenRouter.",
+                error_code="MODEL_NOT_FOUND",
+                http_status=404,
+                provider="openrouter",
+                reason="model_not_found",
+                retryable=True,
+                model=model_name,
+                status_message=f"El modelo {model_name} no está disponible. Se intentará con el siguiente.",
+            )
+        
         if status_code == 429:
             return OpenRouterClientError(
                 message or "Se agotó la cuota del modelo actual.",
@@ -354,11 +367,15 @@ def _normalise_tool_calls(message: dict[str, Any]) -> list[dict[str, Any]]:
     return normalised
 
 
-def ask_openrouter(prompt: str, model_key: str | None = None, tools: list[dict[str, Any]] | None = None) -> dict[str, Any]:
+def ask_openrouter(
+    prompt: str,
+    model_key: str | None = None,
+    tools: list[dict[str, Any]] | None = None,
+) -> dict[str, Any]:
     api_key = settings.OPENROUTER_API_KEY
     if not api_key:
         raise OpenRouterClientError(
-            "OPENROUTER_API_KEY no configurada. Define la clave en el archivo .env del microservicio y usa la misma para todos los modelos.",
+            "OPENROUTER_API_KEY no configurada. Define la clave en el archivo .env del microservicio.",
             error_code="MISSING_API_KEY",
             http_status=500,
             provider="openrouter",
@@ -368,20 +385,30 @@ def ask_openrouter(prompt: str, model_key: str | None = None, tools: list[dict[s
             status_message="La configuración del proveedor de IA no está preparada. Contacta con el administrador.",
         )
 
+    active_tools = DEFAULT_TOOLS if tools is None else tools
+    candidates = _ordered_model_candidates(model_key)
+    last_index = len(candidates) - 1
     last_error: OpenRouterClientError | None = None
-    preferred = (model_key or "primary").lower()
-    active_tools = tools or DEFAULT_TOOLS
-    for candidate_key in _ordered_model_candidates(model_key):
+
+    for idx, candidate_key in enumerate(candidates):
+        is_last = (idx == last_index)
         model_name = settings.get_model_name_for_key(candidate_key)
+
         payload = {
             "model": model_name,
             "messages": [{"role": "user", "content": prompt}],
             "temperature": 0.35,
-            "tools": active_tools,
-            "tool_choice": "auto",
+            "reasoning": {
+                "effort": settings.OPENROUTER_REASONING_EFFORT,
+                "exclude": True,
+            },
         }
+        if active_tools:
+            payload["tools"] = active_tools
+            payload["tool_choice"] = "auto"
         if settings.OPENROUTER_MAX_OUTPUT_TOKENS and settings.OPENROUTER_MAX_OUTPUT_TOKENS > 0:
             payload["max_tokens"] = settings.OPENROUTER_MAX_OUTPUT_TOKENS
+
         try:
             with httpx.Client(timeout=settings.OPENROUTER_TIMEOUT_SECONDS) as client:
                 response = client.post(
@@ -393,9 +420,12 @@ def ask_openrouter(prompt: str, model_key: str | None = None, tools: list[dict[s
                 body = response.json()
         except httpx.HTTPError as exc:
             classified = _classify_http_error(exc, model_name)
-            logger.warning("OpenRouter fallo para modelo %s: %s (%s)", model_name, classified.error_code, classified.reason)
+            logger.warning(
+                "OpenRouter fallo para modelo %s: %s (%s)",
+                model_name, classified.error_code, classified.reason,
+            )
             last_error = classified
-            if not classified.retryable or candidate_key == preferred:
+            if not classified.retryable or is_last:
                 raise classified
             continue
 
@@ -413,7 +443,7 @@ def ask_openrouter(prompt: str, model_key: str | None = None, tools: list[dict[s
             )
             logger.warning("OpenRouter no devolvió contenido válido para %s", model_name)
             last_error = classified
-            if candidate_key == preferred:
+            if is_last:
                 raise classified
             continue
 
@@ -423,13 +453,16 @@ def ask_openrouter(prompt: str, model_key: str | None = None, tools: list[dict[s
             text = choices[0].get("text", "")
 
         tool_calls = _normalise_tool_calls(message)
+        usage_payload = _usage_payload(body)
+        fallback = (candidate_key != candidates[0]) if candidates else False
+
         if tool_calls:
             return {
                 "text": text,
                 "model": model_name,
                 "requested_model": settings.get_model_name_for_key(model_key or "primary"),
-                "fallback": candidate_key != preferred,
-                "usage": _usage_payload(body),
+                "fallback": fallback,
+                "usage": usage_payload,
                 "tool_calls": tool_calls,
             }
 
@@ -446,7 +479,7 @@ def ask_openrouter(prompt: str, model_key: str | None = None, tools: list[dict[s
             )
             logger.warning("OpenRouter devolvió texto vacío para %s", model_name)
             last_error = classified
-            if candidate_key == preferred:
+            if is_last:
                 raise classified
             continue
 
@@ -454,8 +487,8 @@ def ask_openrouter(prompt: str, model_key: str | None = None, tools: list[dict[s
             "text": text,
             "model": model_name,
             "requested_model": settings.get_model_name_for_key(model_key or "primary"),
-            "fallback": candidate_key != preferred,
-            "usage": _usage_payload(body),
+            "fallback": fallback,
+            "usage": usage_payload,
         }
 
     if last_error is not None:

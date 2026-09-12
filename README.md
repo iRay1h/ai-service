@@ -111,10 +111,10 @@ Abre el nuevo archivo `.env` y completa:
 1. **OPENROUTER_API_KEY**: usa la misma clave para todos los modelos de OpenRouter.
    No se usan varias API keys; el fallback se hace entre modelos, no entre proveedores.
 2. **OPENROUTER_MODEL_PRIMARY**, **OPENROUTER_MODEL_SECONDARY**, **OPENROUTER_MODEL_FALLBACK**:
-   por defecto se usan los modelos gratuitos activos que responden correctamente en OpenRouter:
-   - `openai/gpt-oss-20b`
-   - `meta-llama/llama-3.2-3b-instruct`
-   - `google/gemma-3-4b-it`
+   por defecto se usan los modelos Nemotron configurados para Syncra:
+   - `nvidia/nemotron-3-ultra-550b-a55b:free`
+   - `nvidia/nemotron-3-super-120b-a12b:free`
+   - `nvidia/nemotron-nano-9b-v2:free`
 3. **INTERNAL_API_KEY**: invéntate un texto largo y aleatorio. Puedes
    generarlo con:
    ```bash
