@@ -83,7 +83,7 @@ def chat(request: ChatRequest) -> ChatResponse | JSONResponse:
     if tool_calls:
         return ChatResponse(
             success=True,
-            reply=text or "He recibido la necesidad de ejecutar una herramienta del backend.",
+            reply=text or "",
             tool_calls=tool_calls,
             model=actual_model,
             fallback=fallback_used,
