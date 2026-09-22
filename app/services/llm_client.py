@@ -12,6 +12,13 @@ logger = logging.getLogger(__name__)
 
 MODEL_PRIORITY = ["primary", "secondary", "fallback"]
 
+_client = httpx.Client(limits=httpx.Limits(max_keepalive_connections=20, max_connections=20))
+
+
+def close_client() -> None:
+    """Cierra el cliente HTTP compartido. Se llama al apagar el servicio."""
+    _client.close()
+
 DEFAULT_TOOLS: list[dict[str, Any]] = [
     {
         "type": "function",
@@ -139,8 +146,8 @@ DEFAULT_TOOLS: list[dict[str, Any]] = [
         "type": "function",
         "function": {
             "name": "create_document",
-            "description": "Crea un documento o acta real en la base de datos del proyecto usando servicios del backend.",
-            "parameters": {"type": "object", "properties": {"project_id": {"type": "integer"}, "title": {"type": "string"}, "document_type": {"type": "string"}, "content": {"type": "string"}, "meeting_type": {"type": ["string", "null"]}}, "required": ["project_id", "title"], "additionalProperties": False},
+            "description": "Crea un documento o acta real en la base de datos del proyecto usando servicios del backend. Si el usuario pide usar una plantilla (ej. 'plantilla de plan de pruebas', 'PT-ECU-02'), pasa template_name con el nombre o palabras clave que usó el usuario, o template_code si conoces el código exacto (ej. PT-PP-01, PT-ECU-02). El contenido de la plantilla se aplica automáticamente; solo agrega 'content' si necesitas anotar algo adicional, nunca para reemplazar la plantilla.",
+            "parameters": {"type": "object", "properties": {"project_id": {"type": "integer"}, "title": {"type": "string"}, "document_type": {"type": "string"}, "content": {"type": "string"}, "meeting_type": {"type": ["string", "null"]}, "template_code": {"type": ["string", "null"]}, "template_name": {"type": ["string", "null"]}}, "required": ["project_id", "title"], "additionalProperties": False},
         },
     },
     {
@@ -398,11 +405,12 @@ def ask_openrouter(
             "model": model_name,
             "messages": [{"role": "user", "content": prompt}],
             "temperature": 0.35,
-            "reasoning": {
+        }
+        if settings.OPENROUTER_REASONING_EFFORT:
+            payload["reasoning"] = {
                 "effort": settings.OPENROUTER_REASONING_EFFORT,
                 "exclude": True,
-            },
-        }
+            }
         if active_tools:
             payload["tools"] = active_tools
             payload["tool_choice"] = "auto"
@@ -410,19 +418,20 @@ def ask_openrouter(
             payload["max_tokens"] = settings.OPENROUTER_MAX_OUTPUT_TOKENS
 
         try:
-            with httpx.Client(timeout=settings.OPENROUTER_TIMEOUT_SECONDS) as client:
-                response = client.post(
-                    f"{settings.OPENROUTER_BASE_URL}/chat/completions",
-                    headers=_build_headers(api_key),
-                    json=payload,
-                )
-                response.raise_for_status()
-                body = response.json()
+            response = _client.post(
+                f"{settings.OPENROUTER_BASE_URL}/chat/completions",
+                headers=_build_headers(api_key),
+                json=payload,
+                timeout=settings.OPENROUTER_TIMEOUT_SECONDS,
+            )
+            response.raise_for_status()
+            body = response.json()
         except httpx.HTTPError as exc:
             classified = _classify_http_error(exc, model_name)
             logger.warning(
-                "OpenRouter fallo para modelo %s: %s (%s)",
+                "OpenRouter fallo para modelo %s: %s (%s) http_status=%s detalle=%s",
                 model_name, classified.error_code, classified.reason,
+                classified.http_status, str(classified),
             )
             last_error = classified
             if not classified.retryable or is_last:

@@ -18,9 +18,9 @@ load_dotenv()
 class Settings:
     OPENROUTER_API_KEY: str = os.getenv("OPENROUTER_API_KEY", "")
     OPENROUTER_BASE_URL: str = os.getenv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1")
-    OPENROUTER_TIMEOUT_SECONDS: float = float(os.getenv("OPENROUTER_TIMEOUT_SECONDS", "90"))
+    OPENROUTER_TIMEOUT_SECONDS: float = float(os.getenv("OPENROUTER_TIMEOUT_SECONDS", "25"))
     OPENROUTER_MAX_OUTPUT_TOKENS: int = int(os.getenv("OPENROUTER_MAX_OUTPUT_TOKENS", "0"))
-    OPENROUTER_REASONING_EFFORT: str = os.getenv("OPENROUTER_REASONING_EFFORT", "low")
+    OPENROUTER_REASONING_EFFORT: str = os.getenv("OPENROUTER_REASONING_EFFORT", "")
     OPENROUTER_HTTP_REFERER: str = os.getenv("OPENROUTER_HTTP_REFERER", "http://localhost:8000")
     OPENROUTER_APP_TITLE: str = os.getenv("OPENROUTER_APP_TITLE", "Syncra AI")
 

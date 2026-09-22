@@ -11,6 +11,7 @@ Documentacion interactiva automatica disponible en:
 from fastapi import FastAPI
 
 from app.routers import chat, health
+from app.services.llm_client import close_client
 
 app = FastAPI(
     title="Syncra AI Service",
@@ -20,3 +21,8 @@ app = FastAPI(
 
 app.include_router(health.router)
 app.include_router(chat.router)
+
+
+@app.on_event("shutdown")
+def _shutdown() -> None:
+    close_client()
